@@ -867,3 +867,7 @@
 .annotator-hl-filtered {
 	background-color: transparent;
 }
+
+.annotator-marginviewer-element {
+	border: 1px solid black;
+}

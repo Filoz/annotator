@@ -1,3 +1,22 @@
+class Annotator.Plugin.MarginViewer.MarginObjectStore
+  constructor: (data=[] , @_cmpdatafunc , _cmpfunc , @idfield="id" , @marginobjfield="_marginobject" , @indexfield="_marginindex") ->
+    @cmpfunc=(x,y) -> _cmpfunc(x[0],y[0])
+    mapfunc=(x) -> [@_cmpdatafunc(x),x]
+    @data=data.map(mapfunc)
+    @data.sort(cmpfunc)
+    @deletions=0
+    @insertions=0
+    for index in [0..@data.length-1]
+      @data[index][@_indexfield]=index
+  
+  getMarginObjects: -> @data.map((x) -> x[1])
+
+  updateObjectLocation: (obj,newLocation) ->
+    objIndex = this.getObjectLocation(obj)
+    @data[objIndex]=[newLocation,obj]
+    
+  getObjectLocation: (obj) -> obj[@indexfield]
+
 class Annotator.Plugin.MarginViewer extends Annotator.Plugin
   events:
     'annotationsLoaded': 'onAnnotationsLoaded'      
@@ -28,20 +47,13 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
     getPos = (annotation) ->
       return {top:annotation.highlights[0].offsetTop,left:annotation.highlights[0].offsetLeft}
     sortfunc = (left,right) -> 
-      leftpos = getPos(left)
-      rightpos = getPos(right)
-      return sign(sign(leftpos.top - rightpos.top)*2 + sign(leftpos.left - rightpos.left)*RTL_MULT)
-    annotations.sort(sortfunc)
-    @marginIndex = annotations.map((x) -> return [x.highlights[0].offsetTop,x.highlights[0].offsetLeft,x])
-    for index in [0..@marginIndex.length-1]
-      obj = @marginIndex[index][3]
-      @objectIndex[obj.id]=index
-    this.onAnnotationCreated(a) for a in annotations
+      return sign(sign(left.top - right.top)*2 + sign(left.left - right.left)*RTL_MULT)
+    idfunc = (x) -> x.id
+    @marginData = new MarginDataStore annotations getPos sortfunc
+    for marginObjects in @marginData.getMarginObjects()
+      $('<div class="annotator-marginviewer-element">'+annotation.text+'</div>').appendTo('.secondary').css({position: 'absolute', top: annotation.highlights[0].offsetTop+53+'px'})
 
   onAnnotationCreated: (annotation) ->
-    #@marginIndex[annotation.id]=annotation
-    console.log("Added annotation " + annotation.text)
-    $('<div class="annotation-text">'+annotation.text+'</div>').appendTo('.secondary').css({position: 'absolute', top: annotation.highlights[0].offsetTop+53+'px'})
     
   onAnnotationDeleted: (annotation) ->
     # do other stuff
