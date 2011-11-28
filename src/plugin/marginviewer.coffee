@@ -10,10 +10,10 @@ clone = (obj) ->
   return newInstance
 
 class Annotator.Plugin.MarginViewerObjectStore
-  constructor: (data=[] , funcObject , @idfield="id" , @marginobjfield="_marginobject" , @indexfield="_marginindex") ->
-    tempObject = clone(funcObject)
-    tempObject.sortComparison = (x,y) -> funcObject.sortComparison(x[0],y[0])
-    tempObject.mapFunc = (x) -> [funcObject.sortDataMap(x),x]
+  constructor: (data=[] , @funcObject , @idfield="id" , @marginobjfield="_marginObject" , @indexfield="_marginindex") ->
+    tempObject = clone(@funcObject)
+    tempObject.sortComparison = (x,y) => @funcObject.sortComparison(x[0],y[0])
+    tempObject.mapFunc = (x) => [@funcObject.sortDataMap(x),x]
     @data=data.map(tempObject.mapFunc)
     @data.sort(tempObject.sortComparison)
     @deletions=0
@@ -24,11 +24,54 @@ class Annotator.Plugin.MarginViewerObjectStore
   
   getMarginObjects: -> @data.map((x) -> x[1])
 
-  updateObjectLocation: (obj,newLocation) ->
-    objIndex = this.getObjectLocation(obj)
-    @data[objIndex]=[newLocation,obj]
+  updateObjectLocation: (obj) ->
+    objIndex = @getObjectLocation(obj)
+    @data[objIndex]=[@funcObject.sortDataMap(obj),obj]
     
-  getObjectLocation: (obj) -> obj[@indexfield]
+  getObjectLocation: (obj) -> 
+    supposedLocation = obj[@indexfield]
+    # object is at its internally stored location
+    if @data[supposedLocation][1].id = obj.id
+      return supposedLocation
+    minimumIndex=Math.max(0,@deletions)
+    maximumIndex=Math.min(@data.length+1,@insertions)
+
+    for index in [minimumIndex..maximumindex]
+      currentObject = @data[index][1]
+      if currentObject.id = obj.id
+        currentObject[@indexField]=index 
+        return index
+    return -1
+
+  getNewLocationsForObject : (top,bottom,marginObject) ->
+    objectIndex = @getObjectLocation(marginObject.annotation)
+    currentIndex = objectIndex-1
+    currentNewTop = top
+    currentNewBottom = bottom
+    locationChanges=[]
+    # get previous that need to be moved
+    while currentIndex>=0
+      currentObject=@data[currentIndex][1][@marginobjfield]
+      currentObjectBottom=currentObject.offsetTop+$(currentObject).outerHeight()
+      if currentObjectBottom>currentNewTop
+        objectNewTop=currentNewTop-$(currentObject).outerHeight()
+        locationChanges.push([objectNewTop,currentObject])
+        currentNewTop=objectNewTop
+      else
+        break
+      currentIndex-=1
+    currentIndex = objectIndex+1
+    while currentIndex<@data.length
+      currentObject=@data[currentIndex][1][@marginobjfield]
+      currentObjectTop=currentObject.offsetTop
+      if currentObjectTop<currentNewBottom
+        objectNewTop=currentNewBottom
+        locationChanges.push([objectNewTop,currentObject])
+        currentNewBottom=objectNewTop+$(currentObject).outerHeight()
+      else
+        break
+      currentIndex+=1
+    return locationChanges
 
 class Annotator.Plugin.MarginViewer extends Annotator.Plugin
   events:
@@ -64,7 +107,7 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
       idFunction : (annotation) -> annotation.id
       sizeFunction : (element) -> element.outerHeight()
     @marginData = new Annotator.Plugin.MarginViewerObjectStore annotations,funcObject
-    baseOffset = 50
+    @baseOffset = 50
     if annotations.length>0
       currentLocation = 0
       for annotation in @marginData.getMarginObjects()
@@ -72,11 +115,12 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
         newLocation = annotationStart.offsetTop;
         if currentLocation>newLocation
           newLocation=currentLocation
-        marginObjects=$('<div class="annotator-marginviewer-element">'+annotation.text+'</div>').appendTo('.secondary').css({position: 'absolute', top: newLocation+baseOffset+'px'})
+        marginObjects=$('<div class="annotator-marginviewer-element">'+annotation.text+'</div>').appendTo('.secondary').css({position: 'absolute', top: newLocation+@baseOffset+'px'}).click((event) => @onAnnotationSelected(event.target))
         marginObject=marginObjects[0]
         annotation._marginObject=marginObject
         marginObject.annotation=annotation
-        currentLocation = marginObject.offsetTop+$(marginObject).outerHeight(true)-baseOffset
+        @marginData.updateObjectLocation(annotation)
+        currentLocation = marginObject.offsetTop+$(marginObject).outerHeight(true)-@baseOffset
     console.log(@marginData)
 
   onAnnotationCreated: (annotation) ->
@@ -86,3 +130,15 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
     
   onAnnotationUpdated: (annotation) ->
     # yet more stuff
+
+  onAnnotationSelected: (marginObject) ->
+    annotation = marginObject.annotation
+    newTop = annotation.highlights[0].offsetTop
+    newBottom = $(marginObject).outerHeight()
+    newLocationsByObject = @marginData.getNewLocationsForObject(newTop,newBottom,marginObject)
+    newLocationsByObject.push([newTop,marginObject])
+    for newLocationStructure in newLocationsByObject
+      newTop = newLocationStructure[0]
+      currentObject = newLocationStructure[1]
+      $(currentObject).css({top:@baseOffset+newTop})
+      @marginData.updateObjectLocation(currentObject.annotation)
