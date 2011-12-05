@@ -49,25 +49,26 @@ class Annotator.Plugin.MarginViewerObjectStore
     currentNewTop = top
     currentNewBottom = bottom
     locationChanges=[]
-    # get previous that need to be moved
+    # get preceding objects that need to be moved
     while currentIndex>=0
       currentObject=@data[currentIndex][1][@marginobjfield]
-      currentObjectBottom=currentObject.offsetTop+$(currentObject).outerHeight()
+      currentObjectBottom=$(currentObject).offset().top+$(currentObject).outerHeight(true)
       if currentObjectBottom>currentNewTop
-        objectNewTop=currentNewTop-$(currentObject).outerHeight()
+        objectNewTop=currentNewTop-$(currentObject).outerHeight(true)
         locationChanges.push([objectNewTop,currentObject])
         currentNewTop=objectNewTop
       else
         break
       currentIndex-=1
+    # get succeeding objects that need to be moved
     currentIndex = objectIndex+1
     while currentIndex<@data.length
       currentObject=@data[currentIndex][1][@marginobjfield]
-      currentObjectTop=currentObject.offsetTop
+      currentObjectTop=$(currentObject).offset().top
       if currentObjectTop<currentNewBottom
         objectNewTop=currentNewBottom
         locationChanges.push([objectNewTop,currentObject])
-        currentNewBottom=objectNewTop+$(currentObject).outerHeight()
+        currentNewBottom=objectNewTop+$(currentObject).outerHeight(true)
       else
         break
       currentIndex+=1
@@ -100,31 +101,30 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
         return x/Math.abs(x)
     funcObject =
       sortDataMap: (annotation) ->
-        dbg = {top:annotation.highlights[0].offsetTop,left:annotation.highlights[0].offsetLeft}
+        dbg = {top:$(annotation.highlights[0]).offset().top,left:$(annotation.highlights[0]).offset().left}
         return dbg 
       sortComparison : (left,right) -> 
         return sign(sign(left.top - right.top)*2 + sign(left.left - right.left)*RTL_MULT)
       idFunction : (annotation) -> annotation.id
-      sizeFunction : (element) -> element.outerHeight()
+      sizeFunction : (element) -> element.outerHeight(true)
     @marginData = new Annotator.Plugin.MarginViewerObjectStore annotations,funcObject
-    @baseOffset = 50
     if annotations.length>0
       currentLocation = 0
       for annotation in @marginData.getMarginObjects()
         annotationStart = annotation.highlights[0]
-        newLocation = annotationStart.offsetTop;
+        newLocation = $(annotationStart).offset().top;
         if currentLocation>newLocation
           newLocation=currentLocation
-        marginObjects=$('<div class="annotator-marginviewer-element">'+annotation.text+'</div>').appendTo('.secondary').css({position: 'absolute', top: newLocation+@baseOffset+'px'}).click((event) => @onAnnotationSelected(event.target))
+        marginObjects=$('<div class="annotator-marginviewer-element">'+annotation.text+'</div>').appendTo('.secondary').offset({top: newLocation}).click((event) => @onAnnotationSelected(event.target))
         marginObject=marginObjects[0]
         annotation._marginObject=marginObject
         marginObject.annotation=annotation
         @marginData.updateObjectLocation(annotation)
-        currentLocation = marginObject.offsetTop+$(marginObject).outerHeight(true)-@baseOffset
-    console.log(@marginData)
+        currentLocation = $(marginObject).offset().top+$(marginObject).outerHeight(true)
 
   onAnnotationCreated: (annotation) ->
-    
+    # do other stuff
+     
   onAnnotationDeleted: (annotation) ->
     # do other stuff
     
@@ -133,12 +133,12 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
 
   onAnnotationSelected: (marginObject) ->
     annotation = marginObject.annotation
-    newTop = annotation.highlights[0].offsetTop
-    newBottom = $(marginObject).outerHeight()
+    newTop = $(annotation.highlights[0]).offset().top
+    newBottom = $(marginObject).outerHeight(true)+newTop
     newLocationsByObject = @marginData.getNewLocationsForObject(newTop,newBottom,marginObject)
     newLocationsByObject.push([newTop,marginObject])
     for newLocationStructure in newLocationsByObject
       newTop = newLocationStructure[0]
       currentObject = newLocationStructure[1]
-      $(currentObject).css({top:@baseOffset+newTop})
+      $(currentObject).animate({top:"+="+(newTop-$(currentObject).offset().top)},'fast','swing')
       @marginData.updateObjectLocation(currentObject.annotation)
