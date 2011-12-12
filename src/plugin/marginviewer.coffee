@@ -10,23 +10,25 @@ clone = (obj) ->
   return newInstance
 
 class Annotator.Plugin.MarginViewerObjectStore
-  constructor: (data=[] , @funcObject , @idfield="id" , @marginobjfield="_marginObject" , @indexfield="_marginindex") ->
-    tempObject = clone(@funcObject)
-    tempObject.sortComparison = (x,y) => @funcObject.sortComparison(x[0],y[0])
-    tempObject.mapFunc = (x) => [@funcObject.sortDataMap(x),x]
-    @data=data.map(tempObject.mapFunc)
-    @data.sort(tempObject.sortComparison)
+  constructor: (data=[] , paramFuncObject , @idfield="id" , @marginobjfield="_marginObject" , @indexfield="_marginindex") ->
+    @funcObject = clone(paramFuncObject)
+    @funcObject.sortDataComparison = (x,y) => paramFuncObject.sortComparison(x[0],y[0])
+    @funcObject.mapFunc = (x) => [paramFuncObject.sortDataMap(x),x]
+    @data=data.map(@funcObject.mapFunc)
+    @data.sort(@funcObject.sortDataComparison)
     @deletions=0
     @insertions=0
-    for index in [0..@data.length-1]
-      obj=@data[index][1]
-      obj[@indexfield]=index
+    if(@data.length>0)
+      for index in [0..@data.length-1]
+        obj=@data[index][1]
+        obj[@indexfield]=index
   
   getMarginObjects: -> @data.map((x) -> x[1])
 
   updateObjectLocation: (obj) ->
     objIndex = @getObjectLocation(obj)
     @data[objIndex]=[@funcObject.sortDataMap(obj),obj]
+    obj[@indexfield]=objIndex
     
   getObjectLocation: (obj) -> 
     supposedLocation = obj[@indexfield]
@@ -43,8 +45,8 @@ class Annotator.Plugin.MarginViewerObjectStore
         return index
     return -1
 
-  getNewLocationsForObject : (top,bottom,marginObject) ->
-    objectIndex = @getObjectLocation(marginObject.annotation)
+  getNewLocationsForObject : (top,bottom,obj) ->
+    objectIndex = @getObjectLocation(obj.annotation)
     currentIndex = objectIndex-1
     currentNewTop = top
     currentNewBottom = bottom
@@ -74,6 +76,25 @@ class Annotator.Plugin.MarginViewerObjectStore
       currentIndex+=1
     return locationChanges
 
+  # binary search
+  findIndexForNewObject : (location) ->
+    startIndex=0
+    endIndex=@data.length
+    while startIndex<endIndex
+      currentIndex=Math.floor((startIndex+endIndex)/2)
+      if @funcObject.sortComparison(location,@data[currentIndex][0])>0
+        startIndex=currentIndex+1
+      else
+        endIndex=currentIndex
+    return startIndex
+
+  addNewObject : (obj) ->
+    location=@funcObject.sortDataMap(obj)
+    newObjectLocation=@findIndexForNewObject(location)
+    @data=@data[0..newObjectLocation]+[@funcObject.mapFunc(obj)]+@data[newObjectLocation..@data.length]
+    obj[@indexfield]=newObjectLocation
+    @insertions+=1
+    
 class Annotator.Plugin.MarginViewer extends Annotator.Plugin
   events:
     'annotationsLoaded': 'onAnnotationsLoaded'      
@@ -88,26 +109,28 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
       hide: -> 
       load: ->
       isShown: ->
-      element:
-        css: ->
+      element: 
         position: ->
-    
-  onAnnotationsLoaded: (annotations) ->
+        css: ->
+
     RTL_MULT = -1 #should be -1 if RTL else 1
     sign = (x) ->
       if(x==0)
         return 0
       else
         return x/Math.abs(x)
-    funcObject =
+    @funcObject =
       sortDataMap: (annotation) ->
         dbg = {top:$(annotation.highlights[0]).offset().top,left:$(annotation.highlights[0]).offset().left}
         return dbg 
       sortComparison : (left,right) -> 
-        return sign(sign(left.top - right.top)*2 + sign(left.left - right.left)*RTL_MULT)
+        return sign(sign(left.top - right.top)*2 + sign(left.left - right.left)*RTL_MULT) 
       idFunction : (annotation) -> annotation.id
       sizeFunction : (element) -> element.outerHeight(true)
-    @marginData = new Annotator.Plugin.MarginViewerObjectStore annotations,funcObject
+    @marginData = new Annotator.Plugin.MarginViewerObjectStore [],@funcObject
+    
+  onAnnotationsLoaded: (annotations) ->
+    @marginData = new Annotator.Plugin.MarginViewerObjectStore annotations,@funcObject
     if annotations.length>0
       currentLocation = 0
       for annotation in @marginData.getMarginObjects()
@@ -123,7 +146,16 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
         currentLocation = $(marginObject).offset().top+$(marginObject).outerHeight(true)
 
   onAnnotationCreated: (annotation) ->
-    # do other stuff
+    marginObjects=$('<div class="annotator-marginviewer-element">'+annotation.text+'</div>').appendTo('.secondary').hide().offset({top: $(annotation.highlights[0]).offset().top}).click((event) => @onAnnotationSelected(event.target))
+    marginObject=marginObjects[0]
+    marginObject.annotation=annotation
+    annotation._marginObject=marginObject
+    newObjectTop=$(marginObject).offset().top
+    newObjectBottom=newObjectTop+$(marginObject).outerHeight(true)
+    @marginData.addNewObject(annotation)
+    newLocations=@marginData.getNewLocationsForObject(newObjectTop,newObjectBottom,marginObject)
+    @moveObjectsToNewLocation(newLocations)
+    $(marginObject).fadeIn('fast')
      
   onAnnotationDeleted: (annotation) ->
     # do other stuff
@@ -137,8 +169,12 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
     newBottom = $(marginObject).outerHeight(true)+newTop
     newLocationsByObject = @marginData.getNewLocationsForObject(newTop,newBottom,marginObject)
     newLocationsByObject.push([newTop,marginObject])
-    for newLocationStructure in newLocationsByObject
+    @moveObjectsToNewLocation(newLocationsByObject)
+
+  moveObjectsToNewLocation: (newLocations) ->
+    for newLocationStructure in newLocations
       newTop = newLocationStructure[0]
       currentObject = newLocationStructure[1]
       $(currentObject).animate({top:"+="+(newTop-$(currentObject).offset().top)},'fast','swing')
       @marginData.updateObjectLocation(currentObject.annotation)
+
