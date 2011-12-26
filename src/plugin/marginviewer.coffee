@@ -97,19 +97,35 @@ class Annotator.Plugin.MarginViewerObjectStore
         endIndex=currentIndex
     return startIndex
 
-  addNewObject : (obj,top,left) ->
-    location=[top,left]
+  addNewObject : (obj,topval,leftval) ->
+    location={top:topval,left:leftval}
     newObjectLocation=@findIndexForNewObject(location)
-    @data=@data[0..newObjectLocation].concat([@funcObject.mapFunc(obj)],@data[newObjectLocation..@data.length])
+    if newObjectLocation>0
+      @data=@data[0..newObjectLocation-1].concat([@funcObject.mapFunc(obj)],@data[newObjectLocation..@data.length-1])
+    else
+      @data=[@funcObject.mapFunc(obj)].concat(@data[newObjectLocation..@data.length-1])
     obj[@indexfield]=newObjectLocation
     @insertions+=1
     
+  deleteObject : (object) ->
+    objectLocation=@getObjectLocation(object)
+    if objectLocation>0
+      @data=@data[0..objectLocation-1].concat(@data[objectLocation..@data.length-1])
+    else
+      @data=@data[1..@data.length-1]
+    @deletions+=1
+
 class Annotator.Plugin.MarginViewer extends Annotator.Plugin
+  constructor : (element,options) ->
+    super
+    # TODO: get id of div for margin objects from options
+
   events:
-    'annotationsLoaded': 'onAnnotationsLoaded'      
-    'annotationCreated': 'onAnnotationCreated'      
-    'annotationDeleted': 'onAnnotationDeleted'      
-    'annotationUpdated': 'onAnnotationUpdated'      
+    'annotationsLoaded':    'onAnnotationsLoaded'      
+    'annotationCreated':    'onAnnotationCreated'      
+    'annotationDeleted':    'onAnnotationDeleted'      
+    'annotationUpdated':    'onAnnotationUpdated'      
+    ".annotator-hl click":  "onAnnotationSelected"
             
   pluginInit: ->
     return unless Annotator.supported()
@@ -147,32 +163,50 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
         newLocation = $(annotationStart).offset().top;
         if currentLocation>newLocation
           newLocation=currentLocation
-        marginObjects=$('<div class="annotator-marginviewer-element">'+annotation.text+'</div>').appendTo('.secondary').offset({top: newLocation}).click((event) => @onAnnotationSelected(event.target))
-        marginObject=marginObjects[0]
-        annotation._marginObject=marginObject
-        marginObject.annotation=annotation
+        marginObject=@createMarginObject(annotation,newLocation)
         @marginData.updateObjectLocation(annotation)
         currentLocation = $(marginObject).offset().top+$(marginObject).outerHeight(true)
 
   onAnnotationCreated: (annotation) ->
-    marginObjects=$('<div class="annotator-marginviewer-element">'+annotation.text+'</div>').appendTo('.secondary').click((event) => @onAnnotationSelected(event.target)).hide()
-    marginObject=marginObjects[0]
-    marginObject.annotation=annotation
-    annotation._marginObject=marginObject
+    marginObject=@createMarginObject(annotation,hide=true)
     newObjectTop=$(annotation.highlights[0]).offset().top
     newObjectBottom=newObjectTop+$(marginObject).outerHeight(true)
     @marginData.addNewObject(annotation,newObjectTop,$(annotation.highlights[0]).offset().left)
     newLocations=@marginData.getNewLocationsForObject(newObjectTop,newObjectBottom,marginObject)
     @moveObjectsToNewLocation(newLocations)
     $(marginObject).fadeIn('fast').offset({top:newObjectTop})
+
+  onAnnotationSelected: (event) ->
+    annotations = $(event.target)
+      .parents('.annotator-hl')
+      .andSelf()
+      .map -> return $(this).data("annotation")
+    @onMarginSelected(annotations[0]._marginObject)
  
   onAnnotationDeleted: (annotation) ->
-    # do other stuff
+    marginObject=annotation._marginObject
+    @marginData.deleteObject(annotation)
+    $(marginObject).remove()
+    this.publish('delete',annotation)
     
-  onAnnotationUpdated: (annotation) ->
-    # yet more stuff
+  deleteHandler : (event) ->
+    @onAnnotationDeleted(event.target.annotation)
 
-  onAnnotationSelected: (marginObject) ->
+  createMarginObject : (annotation, location=null, hide=false) ->
+    marginObjects=$('<div class="annotator-marginviewer-element">'+annotation.text+'</div>').appendTo('.secondary').click((event) => @onMarginSelected(event.target))
+    if location!=null
+      marginObjects.offset({top: location})
+    if hide
+      marginObjects.hide()
+    marginObject=marginObjects[0]
+    annotation._marginObject=marginObject
+    marginObject.annotation=annotation
+    return marginObject
+
+  onAnnotationUpdated: (annotation) ->
+    # updates not supported right now
+
+  onMarginSelected: (marginObject) ->
     annotation = marginObject.annotation
     newTop = $(annotation.highlights[0]).offset().top
     newBottom = $(marginObject).outerHeight(true)+newTop
