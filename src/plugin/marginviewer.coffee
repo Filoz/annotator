@@ -126,17 +126,18 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
     'annotationDeleted':    'onAnnotationDeleted'      
     'annotationUpdated':    'onAnnotationUpdated'      
     ".annotator-hl click":  "onAnnotationSelected"
-            
+
   pluginInit: ->
     return unless Annotator.supported()
     @annotator.viewer =
       on: ->
-      hide: -> 
-      load: ->
+      hide: (annotations) => @hideHighlightedMargin(annotations)
+      load: (annotations) => @highlightMargin(annotations)
       isShown: ->
       element: 
         position: ->
         css: ->
+    @highlightedObjects = []
 
     RTL_MULT = -1 #should be -1 if RTL else 1
     sign = (x) ->
@@ -221,3 +222,10 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
       $(currentObject).animate({top:"+="+(newTop-$(currentObject).offset().top)},'fast','swing')
       @marginData.updateObjectLocation(currentObject.annotation)
 
+  highlightMargin: (annotations) ->
+    marginObjects=jQuery.map(annotations,(val,i)->val._marginObject)
+    $(marginObjects).css({border: '2px solid blue'})
+
+  hideHighlightedMargin: (annotations) ->
+    marginObjects=jQuery.map(annotations,(val,i)->val._marginObject)
+    $(marginObjects).css({border: '1px solid black'})

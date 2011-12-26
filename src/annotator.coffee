@@ -437,10 +437,16 @@ class Annotator extends Delegator
   # the @viewer is hidden.
   #
   # Returns nothing.
-  startViewerHideTimer: =>
+  startViewerHideTimer: (event) =>
     # Don't do this if timer has already been set by another annotation.
+    annotations = $(event.target)
+      .parents('.annotator-hl')
+      .andSelf()
+      .map -> return $(this).data("annotation")
+
+   
     if not @viewerHideTimer
-      @viewerHideTimer = setTimeout @viewer.hide, 250
+      @viewerHideTimer = setTimeout (=> @viewer.hide(annotations)), 250
 
   # Viewer#element event callback. Clears the timer set by
   # Annotator#startViewerHideTimer() when the @viewer is moused over.
