@@ -112,7 +112,7 @@ class Annotator.Plugin.MarginViewerObjectStore
             # if object can reach goal, send to goal
             objectNewTop=currentObjectGoalLocation.top
             locationChanges.push([objectNewTop,currentObject])
-            currentNewTop=currentObjectGoalLocation.top
+            currentNewBottom=objectNewTop+currentObjectSize
           else
             # bring object as close as possible
             objectNewTop=currentNewBottom
@@ -257,7 +257,7 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
     for newLocationStructure in newLocations
       newTop = newLocationStructure[0]
       currentObject = newLocationStructure[1]
-      $(currentObject).animate({top:"+="+(newTop-$(currentObject).offset().top)},'fast','swing')
+      $(currentObject).animate({top:"+="+(newTop-$(currentObject).offset().top)},'slow','swing')
       @marginData.updateObjectLocation(currentObject.annotation)
 
   highlightMargin: (annotations) ->
