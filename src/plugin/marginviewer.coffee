@@ -63,25 +63,63 @@ class Annotator.Plugin.MarginViewerObjectStore
     # get preceding objects that need to be moved
     while currentIndex>=0
       currentObject=@data[currentIndex][1][@marginobjfield]
-      currentObjectBottom=$(currentObject).offset().top+$(currentObject).outerHeight(true)
+      currentObjectSize=$(currentObject).outerHeight(true)
+      currentObjectTop=$(currentObject).offset().top
+      currentObjectBottom=currentObjectTop+currentObjectSize
+      currentObjectGoalLocation=@funcObject.sortDataMap(currentObject.annotation)
+      currentObjectGoalBottom=currentObjectGoalLocation.top+currentObjectSize
       if currentObjectBottom>currentNewTop
-        objectNewTop=currentNewTop-$(currentObject).outerHeight(true)
+        # move up
+        objectNewTop=currentNewTop-currentObjectSize
         locationChanges.push([objectNewTop,currentObject])
         currentNewTop=objectNewTop
       else
-        break
+        # object doesnt needs to be moved up, maybe it should be moved down
+        # if object isnt at its 'natural' location, move down as far as possible
+        if currentObjectGoalLocation.top>currentObjectTop
+          if currentObjectGoalBottom<currentNewTop
+            # if object can reach goal, send to goal
+            objectNewTop=currentObjectGoalLocation.top
+            locationChanges.push([objectNewTop,currentObject])
+            currentNewTop=currentObjectGoalLocation.top
+          else
+            # bring object as close as possible
+            objectNewTop=currentNewTop-currentObjectSize
+            locationChanges.push([objectNewTop,currentObject])
+            currentNewTop=objectNewTop
+        else
+          break
       currentIndex-=1
     # get succeeding objects that need to be moved
     currentIndex = objectIndex+1
     while currentIndex<@data.length
       currentObject=@data[currentIndex][1][@marginobjfield]
+      currentObjectSize=$(currentObject).outerHeight(true)
       currentObjectTop=$(currentObject).offset().top
+      currentObjectBottom=currentObjectTop+currentObjectSize
+      currentObjectGoalLocation=@funcObject.sortDataMap(currentObject.annotation)
+      currentObjectGoalBottom=currentObjectGoalLocation.top+currentObjectSize
       if currentObjectTop<currentNewBottom
+        # move down
         objectNewTop=currentNewBottom
         locationChanges.push([objectNewTop,currentObject])
-        currentNewBottom=objectNewTop+$(currentObject).outerHeight(true)
+        currentNewBottom=objectNewTop+currentObjectSize
       else
-        break
+        # object doesnt need to be moved down, maybe it should be moved up
+        # if object isnt at its 'natural' location, move up as far as possible
+        if currentObjectGoalLocation.top<currentObjectTop
+          if currentObjectGoalLocation.top>currentNewBottom
+            # if object can reach goal, send to goal
+            objectNewTop=currentObjectGoalLocation.top
+            locationChanges.push([objectNewTop,currentObject])
+            currentNewTop=currentObjectGoalLocation.top
+          else
+            # bring object as close as possible
+            objectNewTop=currentNewBottom
+            locationChanges.push([objectNewTop,currentObject])
+            currentNewBottom=objectNewTop+currentObjectSize
+        else
+          break
       currentIndex+=1
     return locationChanges
 
