@@ -465,7 +465,7 @@ class Annotator extends Delegator
   # Returns nothing.
   checkForStartSelection: (event) =>
     unless event and this.isAnnotator(event.target)
-      this.startViewerHideTimer()
+      this.startViewerHideTimer([]) #TODO: may need to check for existing annotations
       @mouseIsDown = true
 
   # Annotator#element callback. Checks to see if a selection has been made
@@ -488,7 +488,8 @@ class Annotator extends Delegator
 
     for range in @selectedRanges
       container = range.commonAncestor
-      return if this.isAnnotator(container)
+      return if this.isAnnotatorViewer(container)
+      return if this.isAnnotatorEditor(container)
 
     if event and @selectedRanges.length
       @adder
@@ -513,6 +514,14 @@ class Annotator extends Delegator
   # Returns true if the element is a child of an annotator element.
   isAnnotator: (element) ->
     !!$(element).parents().andSelf().filter('[class^=annotator-]').not(@wrapper).length
+
+  # check if the element is the viewer
+  isAnnotatorViewer: (element) ->
+    !!$(element).parents().andSelf().filter('[class^=annotator-viewer]').not(@wrapper).length
+    
+   # check if the element is the editor
+  isAnnotatorEditor: (element) ->
+    !!$(element).parents().andSelf().filter('[class^=annotator-editor]').not(@wrapper).length
 
   # Annotator#element callback. Displays viewer with all annotations
   # associated with highlight Elements under the cursor.

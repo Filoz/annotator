@@ -223,9 +223,21 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
       @marginData.updateObjectLocation(currentObject.annotation)
 
   highlightMargin: (annotations) ->
+    if @highlightedObjects.length>0
+      oldObjects=[]
+      for existingHighlight in @highlightedObjects
+        found=false
+        for newHighlight in annotations
+          if newHighlight.id == existingHighlight.id
+            found=true
+        if not found
+          oldObjects.push(existingHighlight)
+      @hideHighlightedMargin oldObjects 
+    @highlightedObjects=annotations
     marginObjects=jQuery.map(annotations,(val,i)->val._marginObject)
     $(marginObjects).css({border: '2px solid blue'})
 
   hideHighlightedMargin: (annotations) ->
+    @highlightedObjects=[]
     marginObjects=jQuery.map(annotations,(val,i)->val._marginObject)
     $(marginObjects).css({border: '1px solid black'})
