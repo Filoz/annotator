@@ -176,6 +176,7 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
         position: ->
         css: ->
     @highlightedObjects = []
+    @currentSelectedAnnotation = null
 
     RTL_MULT = -1 #should be -1 if RTL else 1
     sign = (x) ->
@@ -232,7 +233,8 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
     @onAnnotationDeleted(event.target.annotation)
 
   createMarginObject : (annotation, location=null, hide=false) ->
-    marginObjects=$('<div class="annotator-marginviewer-element">'+annotation.text+'</div>').appendTo('.secondary').click((event) => @onMarginSelected(event.target))
+    createdObject = new Date annotation.created
+    marginObjects=$('<div class="annotator-marginviewer-element"><div class="annotation-marginviewer-header" style="border-bottom: 1px solid black"><span class="annotation-marginviewer-user">'+annotation.user.name+'</span><span class="annotation-marginviewer-date" style="float: left; direction: ltr;">'+createdObject.toString()+'</span></div><div class="annotation-marginviewer-text">'+annotation.text+'</div></div>').appendTo('.secondary').click((event) => @onMarginSelected(event.target))
     if location!=null
       marginObjects.offset({top: location})
     if hide
@@ -245,19 +247,45 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
   onAnnotationUpdated: (annotation) ->
     # updates not supported right now
 
-  onMarginSelected: (marginObject) ->
+  onMarginSelected: (obj) ->
+    marginObject = $(obj).closest(".annotator-marginviewer-element")[0]
     annotation = marginObject.annotation
+    horizontalSlide=[]
     newTop = $(annotation.highlights[0]).offset().top
     newBottom = $(marginObject).outerHeight(true)+newTop
     newLocationsByObject = @marginData.getNewLocationsForObject(newTop,newBottom,marginObject)
-    newLocationsByObject.push([newTop,marginObject])
-    @moveObjectsToNewLocation(newLocationsByObject)
+    if @currentSelectedAnnotation != null
+      if annotation.id is @currentSelectedAnnotation.id
+        return
+      else
+        currentMarginObject=@currentSelectedAnnotation._marginObject
+        # find object's new top if it needs to change, also remove it from the list
+        currentObjectNewTop = $(currentMarginObject).offset().top
+        newLocationsByObject=$.grep(newLocationsByObject,(value) ->
+          if value[1].annotation.id is currentMarginObject.annotation.id
+            currentObjectNewTop=value[0]
+            return false
+          else
+            return true
+        )
+        horizontalSlide.push([currentObjectNewTop,"+=20px",currentMarginObject])
+        $(currentMarginObject).removeClass("annotator-marginviewer-selected")
+    $(marginObject).addClass("annotator-marginviewer-selected")
+    horizontalSlide.push([newTop,"-=20px",marginObject])
+    @moveObjectsToNewLocation(newLocationsByObject,horizontalSlide)
+    @currentSelectedAnnotation = annotation
 
-  moveObjectsToNewLocation: (newLocations) ->
+  moveObjectsToNewLocation: (newLocations,horizontalSlideObjects=[]) ->
     for newLocationStructure in newLocations
       newTop = newLocationStructure[0]
       currentObject = newLocationStructure[1]
-      $(currentObject).animate({top:"+="+(newTop-$(currentObject).offset().top)},'slow','swing')
+      $(currentObject).animate({top:"+="+(newTop-$(currentObject).offset().top)},'fast','swing')
+      @marginData.updateObjectLocation(currentObject.annotation)
+    for horizontalSlide in horizontalSlideObjects
+      newTop = horizontalSlide[0]
+      newMarginRight = horizontalSlide[1]
+      currentObject = horizontalSlide[2]
+      $(currentObject).animate({top:"+="+(newTop-$(currentObject).offset().top),'margin-right':newMarginRight},'fast','swing')
       @marginData.updateObjectLocation(currentObject.annotation)
 
   highlightMargin: (annotations) ->
