@@ -232,9 +232,20 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
   deleteHandler : (event) ->
     @onAnnotationDeleted(event.target.annotation)
 
+  zeroPad : (num,count) ->
+    numZeroPad = String(num)
+    while numZeroPad.length<count
+      numZeroPad = "0" + numZeroPad
+    return numZeroPad
+
+  formattedDateTime : (dateobj) ->
+    meridiemString = if dateobj.getHours()<12 then "AM" else "PM"
+    timeString = dateobj.getHours() + ":" + @zeroPad(dateobj.getMinutes(),2) + meridiemString
+    dateString = @zeroPad(dateobj.getDate(),2) + "." + @zeroPad(dateobj.getMonth(),2) + "." + dateobj.getFullYear()
+    return timeString + " " + dateString
+
   createMarginObject : (annotation, location=null, hide=false) ->
-    createdObject = new Date annotation.created
-    marginObjects=$('<div class="annotator-marginviewer-element"><div class="annotation-marginviewer-header" style="border-bottom: 1px solid black"><span class="annotation-marginviewer-user">'+annotation.user.name+'</span><span class="annotation-marginviewer-date" style="float: left; direction: ltr;">'+createdObject.toString()+'</span></div><div class="annotation-marginviewer-text">'+annotation.text+'</div></div>').appendTo('.secondary').click((event) => @onMarginSelected(event.target))
+    marginObjects=$('<div class="annotator-marginviewer-element"><div class="annotator-marginviewer-header"><span class="annotator-marginviewer-user">'+annotation.user.name+'</span><span class="annotator-marginviewer-date" style="float: left; direction: ltr;">'+@formattedDateTime(new Date annotation.created)+'</span></div><div class="annotator-marginviewer-text">'+annotation.text+'</div></div>').appendTo('.secondary').click((event) => @onMarginSelected(event.target))
     if location!=null
       marginObjects.offset({top: location})
     if hide
@@ -301,9 +312,9 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
       @hideHighlightedMargin oldObjects 
     @highlightedObjects=annotations
     marginObjects=jQuery.map(annotations,(val,i)->val._marginObject)
-    $(marginObjects).css({border: '2px solid blue'})
+    $(marginObjects).addClass("annotator-marginviewer-highlighted")
 
   hideHighlightedMargin: (annotations) ->
     @highlightedObjects=[]
     marginObjects=jQuery.map(annotations,(val,i)->val._marginObject)
-    $(marginObjects).css({border: '1px solid black'})
+    $(marginObjects).removeClass("annotator-marginviewer-highlighted")
