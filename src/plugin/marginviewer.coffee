@@ -217,11 +217,20 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
     $(marginObject).fadeIn('fast').offset({top:newObjectTop})
 
   onAnnotationSelected: (event) ->
+    event.stopPropagation()
     annotations = $(event.target)
       .parents('.annotator-hl')
       .andSelf()
       .map -> return $(this).data("annotation")
-    @onMarginSelected(annotations[0]._marginObject)
+    #cycle annotations
+    selectIndex=0
+    if annotations.length>1
+      # find currently annotated object
+      for i in [0..annotations.length-1]
+        if $(annotations[i]._marginObject).hasClass("annotator-marginviewer-selected")
+          selectIndex=(i+1)%annotations.length
+          break
+    @onMarginSelected(annotations[selectIndex]._marginObject)
  
   onAnnotationDeleted: (annotation) ->
     marginObject=annotation._marginObject

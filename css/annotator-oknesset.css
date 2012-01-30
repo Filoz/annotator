@@ -918,4 +918,13 @@
     filter: progid:DXImageTransform.Microsoft.Gradient(
                 StartColorStr='#fef8cd', EndColorStr='#f6edb5', GradientType=0);
 }
-
+.annotator-marginviewer-selected>.annotator-marginviewer-header:before {
+	content:"";
+	font-size: 0px; line-height: 0%; width: 0px;
+	height: 0px;
+	border-color: transparent transparent transparent black;
+	border-style: solid;
+	border-width: 10px 10px 10px 10px;
+	margin-right:-26px;
+	margin-top: 2px;
+}
