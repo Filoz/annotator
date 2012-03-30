@@ -40,7 +40,8 @@ class Annotator extends Delegator
     adder:   '<div class="annotator-adder"><button>' + _t('Annotate') + '</button></div>'
     wrapper: '<div class="annotator-wrapper"></div>'
 
-  options: {} # Configuration options
+  options: # Configuration options
+    readOnly: false # Start Annotator in read-only mode. No controls will be shown.
 
   plugins: {}
 
@@ -85,7 +86,8 @@ class Annotator extends Delegator
 
     # Return early if the annotator is not supported.
     return this unless Annotator.supported()
-    this._setupDocumentEvents()._setupWrapper()._setupViewer()._setupEditor()
+    this._setupDocumentEvents() unless @options.readOnly
+    this._setupWrapper()._setupViewer()._setupEditor()
 
     # Create model dom elements
     for name, src of @html
@@ -113,20 +115,22 @@ class Annotator extends Delegator
   #
   # Returns itself to allow chaining.
   _setupViewer: ->
-    @viewer = new Annotator.Viewer()
+    @viewer = new Annotator.Viewer(readOnly: @options.readOnly)
     @viewer.hide()
       .on("edit", this.onEditAnnotation)
       .on("delete", this.onDeleteAnnotation)
       .addField({
         load: (field, annotation) =>
-          $(field).escape(annotation.text || '')
+          if annotation.text
+            $(field).escape(annotation.text)
+          else
+            $(field).html("<i>#{_t 'No Comment'}</i>")
           this.publish('annotationViewerTextField', [field, annotation])
       })
       .element.appendTo(@wrapper).bind({
         "mouseover": this.clearViewerHideTimer
         "mouseout":  this.startViewerHideTimer
       })
-
     this
 
   # Creates an instance of the Annotator.Editor and assigns it to @editor.
@@ -178,13 +182,33 @@ class Annotator extends Delegator
     selection = util.getGlobal().getSelection()
 
     ranges = []
+    rangesToIgnore = []
     unless selection.isCollapsed
       ranges = for i in [0...selection.rangeCount]
-        browserRange = new Range.BrowserRange(selection.getRangeAt(i))
-        browserRange.normalize().limit(@wrapper[0])
+        r = selection.getRangeAt(i)
+        browserRange = new Range.BrowserRange(r)
+        normedRange = browserRange.normalize().limit(@wrapper[0])
+
+        # If the new range falls fully outside the wrapper, we
+        # should add it back to the document but not return it from
+        # this method
+        rangesToIgnore.push(r) if normedRange is null
+
+        normedRange
+
+      # BrowserRange#normalize() modifies the DOM structure and deselects the
+      # underlying text as a result. So here we remove the selected ranges and
+      # reapply the new ones.
+      selection.removeAllRanges()
+
+    for r in rangesToIgnore
+      selection.addRange(r)
 
     # Remove any ranges that fell outside of @wrapper.
-    $.grep ranges, (range) -> range
+    $.grep ranges, (range) ->
+      # Add the normed range back to the selection if it exists.
+      selection.addRange(range.toRange()) if range
+      range
 
   # Public: Creates and returns a new annotation object. Publishes the
   # 'beforeAnnotationCreated' event to allow the new annotation to be modified.
@@ -307,10 +331,10 @@ class Annotator extends Delegator
       for n in now
         this.setupAnnotation(n, false) # 'false' suppresses event firing
 
-      # If there are more to do, do them after a 100ms break (for browser
+      # If there are more to do, do them after a 1ms break (for browser
       # responsiveness).
       if annList.length > 0
-        setTimeout((-> loader(annList)), 100)
+        setTimeout((-> loader(annList)), 1)
       else
         this.publish 'annotationsLoaded', [clone]
 
@@ -334,9 +358,15 @@ class Annotator extends Delegator
   #
   # Returns an array of highlight Elements.
   highlightRange: (normedRange) ->
-    elemList = for node in normedRange.textNodes()
-      wrapper = @hl.clone().show()
-      $(node).wrap(wrapper).parent().get(0)
+    white = /^\s*$/
+
+    # Ignore text nodes that contain only whitespace characters. This prevents
+    # spans being injected between elements that can only contain a restricted
+    # subset of nodes such as table rows and lists. This does mean that there
+    # may be the odd abandoned whitespace node in a paragraph that is skipped
+    # but better than breaking table layouts.
+    for node in normedRange.textNodes() when not white.test(node.nodeValue)
+      $(node).wrapAll(@hl).parent().show()[0]
 
   # Public: Registers a plugin with the Annotator. A plugin can only be
   # registered once. The plugin will be instantiated in the following order.
@@ -605,6 +635,10 @@ class Annotator.Plugin extends Delegator
 
 # Bind our local copy of jQuery so plugins can use the extensions.
 Annotator.$ = $
+
+# Export other modules for use in plugins.
+Annotator.Delegator = Delegator
+Annotator.Range = Range
 
 # Bind gettext helper so plugins can use localisation.
 Annotator._t = _t

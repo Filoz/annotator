@@ -36,26 +36,42 @@ describe 'Annotator', ->
       spyOn(annotator, '_setupWrapper').andReturn(annotator)
       spyOn(annotator, '_setupViewer').andReturn(annotator)
       spyOn(annotator, '_setupEditor').andReturn(annotator)
-      Annotator.prototype.constructor.call(annotator, annotator.element[0])
+      spyOn(annotator, '_setupDocumentEvents').andReturn(annotator)
 
     it "should have a jQuery wrapper as @element", ->
+      Annotator.prototype.constructor.call(annotator, annotator.element[0])
       expect(annotator.element instanceof $).toBeTruthy()
 
     it "should create an empty @plugin object", ->
+      Annotator.prototype.constructor.call(annotator, annotator.element[0])
       expect(annotator.hasOwnProperty('plugins')).toBeTruthy()
 
     it "should create the adder and highlight properties from the @html strings", ->
+      Annotator.prototype.constructor.call(annotator, annotator.element[0])
       expect(annotator.adder instanceof $).toBeTruthy()
       expect(annotator.hl instanceof $).toBeTruthy()
 
     it "should call Annotator#_setupWrapper()", ->
+      Annotator.prototype.constructor.call(annotator, annotator.element[0])
       expect(annotator._setupWrapper).toHaveBeenCalled()
 
     it "should call Annotator#_setupViewer()", ->
+      Annotator.prototype.constructor.call(annotator, annotator.element[0])
       expect(annotator._setupViewer).toHaveBeenCalled()
 
     it "should call Annotator#_setupEditor()", ->
+      Annotator.prototype.constructor.call(annotator, annotator.element[0])
       expect(annotator._setupEditor).toHaveBeenCalled()
+
+    it "should call Annotator#_setupDocumentEvents()", ->
+      Annotator.prototype.constructor.call(annotator, annotator.element[0])
+      expect(annotator._setupDocumentEvents).toHaveBeenCalled()
+
+    it "should NOT call Annotator#_setupDocumentEvents() if options.readOnly is true", ->
+      Annotator.prototype.constructor.call(annotator, annotator.element[0], {
+        readOnly: true
+      })
+      expect(annotator._setupDocumentEvents).not.toHaveBeenCalled()
 
   describe "_setupDocumentEvents", ->
     beforeEach: ->
@@ -124,6 +140,22 @@ describe 'Annotator', ->
 
       expect(mockViewer.addField).toHaveBeenCalled()
       expect(typeof args.load).toBe("function")
+
+    it "should set the contents of the field on load", ->
+      field = document.createElement('div')
+      annotation = {text: "test"}
+      callback = jasmine.createSpy('callback')
+
+      annotator.viewer.fields[0].load(field, annotation)
+      expect(jQuery(field).html()).toBe("test")
+
+    it "should set the contents of the field to placeholder text when empty", ->
+      field = document.createElement('div')
+      annotation = {text: ""}
+      callback = jasmine.createSpy('callback')
+
+      annotator.viewer.fields[0].load(field, annotation)
+      expect(jQuery(field).html()).toBe("<i>No Comment</i>")
 
     it "should setup the default text field to publish an event on load", ->
       field = document.createElement('div')
@@ -194,21 +226,32 @@ describe 'Annotator', ->
     mockGlobal = null
     mockSelection = null
     mockRange = null
+    mockBrowserRange = null
 
     beforeEach ->
+      mockBrowserRange = {
+        cloneRange: jasmine.createSpy('Range#cloneRange()')
+      }
+      mockBrowserRange.cloneRange.andReturn(mockBrowserRange)
+
       # This mock pretends to be both NomalizedRange and BrowserRange.
       mockRange = {
         limit: jasmine.createSpy('NormalizedRange#limit()')
         normalize: jasmine.createSpy('BrowserRange#normalize()')
+        toRange: jasmine.createSpy('NormalizedRange#toRange()').andReturn('range')
       }
       mockRange.limit.andReturn(mockRange)
       mockRange.normalize.andReturn(mockRange)
+
+      # https://developer.mozilla.org/en/nsISelection
       mockSelection = {
-        getRangeAt: jasmine.createSpy().andReturn('')
+        getRangeAt: jasmine.createSpy('Selection#getRangeAt()').andReturn(mockBrowserRange)
+        removeAllRanges: jasmine.createSpy('Selection#removeAllRanges()')
+        addRange: jasmine.createSpy('Selection#addRange()')
         rangeCount: 1
       }
       mockGlobal = {
-        getSelection: jasmine.createSpy().andReturn(mockSelection)
+        getSelection: jasmine.createSpy('window.getSelection()').andReturn(mockSelection)
       }
       spyOn(util, 'getGlobal').andReturn(mockGlobal)
       spyOn(Range, 'BrowserRange').andReturn(mockRange)
@@ -221,15 +264,25 @@ describe 'Annotator', ->
       ranges = annotator.getSelectedRanges()
       expect(ranges).toEqual([mockRange])
 
-    it "should remove any failed calls to NormalizedRange#limit()", ->
+    it "should remove any failed calls to NormalizedRange#limit(), but re-add them to the global selection", ->
       mockRange.limit.andReturn(null)
       ranges = annotator.getSelectedRanges()
       expect(ranges).toEqual([])
+      expect(mockSelection.addRange).toHaveBeenCalledWith(mockBrowserRange)
 
     it "should return an empty array if selection.isCollapsed is true", ->
       mockSelection.isCollapsed = true
       ranges = annotator.getSelectedRanges()
       expect(ranges).toEqual([])
+
+    it "should deselect all current ranges", ->
+      ranges = annotator.getSelectedRanges()
+      expect(mockSelection.removeAllRanges).toHaveBeenCalled()
+
+    it "should reassign the newly normalized ranges", ->
+      ranges = annotator.getSelectedRanges()
+      expect(mockSelection.addRange).toHaveBeenCalled()
+      expect(mockSelection.addRange).toHaveBeenCalledWith('range')
 
   describe "createAnnotation", ->
     it "should return an empty annotation", ->
@@ -390,16 +443,25 @@ describe 'Annotator', ->
 
   describe "highlightRange", ->
     it "should return a highlight element for every textNode in the range", ->
-      textNodes = (document.createTextNode text for text in ['hello', 'world'])
+      textNodes = (document.createTextNode(text) for text in ['hello', 'world'])
       mockRange =
         textNodes: -> textNodes
 
       elements = annotator.highlightRange(mockRange)
-
       expect(elements.length).toBe(2)
       expect(elements[0].className).toBe('annotator-hl')
       expect(elements[0].firstChild).toBe(textNodes[0])
       expect(elements[1].firstChild).toBe(textNodes[1])
+
+    it "should ignore textNodes that contain only whitespace", ->
+      textNodes = (document.createTextNode(text) for text in ['hello', '\n ', '      '])
+      mockRange =
+        textNodes: -> textNodes
+
+      elements = annotator.highlightRange(mockRange)
+      expect(elements.length).toBe(1)
+      expect(elements[0].className).toBe('annotator-hl')
+      expect(elements[0].firstChild).toBe(textNodes[0])
 
   describe "addPlugin", ->
     plugin = null
