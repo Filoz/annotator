@@ -45,8 +45,7 @@ class Annotator.Plugin.MarginViewerObjectStore
     if @objectEquals(@data[supposedLocation][1],obj)
       return supposedLocation
     minimumIndex=Math.max(0,@deletions)
-    maximumIndex=Math.min(@data.length-1,@insertions)
-
+    maximumIndex=Math.min(@data.length-1,@insertions) 
     for index in [minimumIndex..maximumIndex]
       currentObject = @data[index][1]
       if @objectEquals(currentObject,obj)
@@ -253,8 +252,12 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
     dateString = @zeroPad(dateobj.getDate(),2) + "." + @zeroPad(dateobj.getMonth(),2) + "." + dateobj.getFullYear()
     return timeString + " " + dateString
 
+  renderMarginObject : (annotation) ->
+    datetime = if annotation.created then @formattedDateTime(new Date annotation.created) else ''
+    return '<div class="annotator-marginviewer-element"><div class="annotator-marginviewer-header"><span class="annotator-marginviewer-user">'+annotation.user+'</span><span class="annotator-marginviewer-date" style="float: left; direction: ltr;">'+datetime+'</span></div><div class="annotator-marginviewer-text">'+annotation.text+'</div></div>'
+
   createMarginObject : (annotation, location=null, hide=false) ->
-    marginObjects=$('<div class="annotator-marginviewer-element"><div class="annotator-marginviewer-header"><span class="annotator-marginviewer-user">'+annotation.user.name+'</span><span class="annotator-marginviewer-date" style="float: left; direction: ltr;">'+@formattedDateTime(new Date annotation.created)+'</span></div><div class="annotator-marginviewer-text">'+annotation.text+'</div></div>').appendTo('.secondary').click((event) => @onMarginSelected(event.target))
+    marginObjects=$(@renderMarginObject(annotation)).appendTo('.secondary').click((event) => @onMarginSelected(event.target)).mouseenter((event) => @onMarginMouseIn(event.target)).mouseleave((event) => @onMarginMouseOut(event.target))
     if location!=null
       marginObjects.offset({top: location})
     if hide
@@ -266,6 +269,12 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
 
   onAnnotationUpdated: (annotation) ->
     # updates not supported right now
+
+  onMarginMouseIn: (obj) ->
+    $($(obj).closest(".annotator-marginviewer-element")[0].annotation.highlights).addClass("annotator-hl-uber-temp").removeClass("annotator-hl")
+
+  onMarginMouseOut: (obj) ->
+    $($(obj).closest(".annotator-marginviewer-element")[0].annotation.highlights).addClass("annotator-hl").removeClass("annotator-hl-uber-temp")
 
   onMarginSelected: (obj) ->
     marginObject = $(obj).closest(".annotator-marginviewer-element")[0]
@@ -279,6 +288,7 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
         return
       else
         currentMarginObject=@currentSelectedAnnotation._marginObject
+        $(@currentSelectedAnnotation.highlights).removeClass("annotator-hl-uber").removeClass("annotator-hl-uber-temp").addClass("annotator-hl")
         # find object's new top if it needs to change, also remove it from the list
         currentObjectNewTop = $(currentMarginObject).offset().top
         newLocationsByObject=$.grep(newLocationsByObject,(value) ->
@@ -293,6 +303,7 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
     $(marginObject).addClass("annotator-marginviewer-selected")
     horizontalSlide.push([newTop,"-=20px",marginObject])
     @moveObjectsToNewLocation(newLocationsByObject,horizontalSlide)
+    $(annotation.highlights).addClass("annotator-hl-uber").removeClass("annotator-hl")
     @currentSelectedAnnotation = annotation
 
   moveObjectsToNewLocation: (newLocations,horizontalSlideObjects=[]) ->
