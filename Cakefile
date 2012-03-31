@@ -1,7 +1,15 @@
-fs = require 'fs'
-path = require 'path'
-{print, debug} = require 'util'
-{spawn, exec} = require 'child_process'
+fs   = require 'fs'
+
+{print} = require 'util'
+{exec}  = require 'child_process'
+
+FFI  = require 'node-ffi'
+libc = new FFI.Library(null, "system": ["int32", ["string"]])
+run  = libc.system
+
+COFFEE = "`npm bin`/coffee"
+UGLIFY_JS = "`npm bin`/uglifyjs"
+UGLIFY_CSS = "`npm bin`/uglifycss"
 
 CORE = [ 'extensions'
        , 'console'
@@ -21,44 +29,50 @@ PLUGINS = [ 'tags'
           , 'markdown'
           , 'unsupported'
           , 'permissions'
+          , 'annotateitpermissions'
           ]
 
 BOOKMARKLET_PATH = 'contrib/bookmarklet'
-BOOKMARKLET_PLUGINS = ['store', 'permissions', 'unsupported', 'tags']
+BOOKMARKLET_PLUGINS = ['auth', 'store', 'permissions', 'annotateitpermissions', 'unsupported', 'tags']
 
 task 'watch', 'Run development source watcher', ->
-  util.relay 'coffee', ['-w', '-b', '-c', '-o', 'lib/', 'src/'], util.noisyPrint
+  run "#{COFFEE} --watch --bare --compile --output #{__dirname}/lib #{__dirname}/src"
 
-option '-f', '--filter [string]', 'Filename filter to apply to `cake test`'
+task "serve", "Serve the current directory", ->
+  run "python -m SimpleHTTPServer 8000"
 
-task 'test', 'Run tests. Filter tests using `-f [filter]` eg. cake -f auth test', (options) ->
-  console.log "WARNING: A number of tests are currently broken, pending resolution of jsdom",
-              "issue 394. See:\n  https://github.com/tmpvar/jsdom/issues/394"
+task "test", "Open the test suite in the browser", ->
+  run "open http://localhost:8000/test/runner.html"
 
-  args = ["#{__dirname}/test/runner.coffee"]
-  args.push(options.filter) if options.filter
+task "test:phantom", "Open the test suite in the browser", ->
+  run "phantomjs test/runner.coffee http://localhost:8000/test/runner.html"
 
-  util.relay 'coffee', args
-
+option "", "--no-minify", "Do not minify built scripts with `cake package`"
 task 'package', 'Build the packaged annotator', ->
   invoke 'package:core'
   invoke 'package:plugins'
   invoke 'package:css'
 
-task 'package:core', 'Build pkg/annotator.min.js', ->
-  packager.build_coffee util.src_files(CORE), 'pkg/annotator.min.js'
+task 'package:core', 'Build pkg/annotator.min.js', (options) ->
+  packager.build_coffee util.src_files(CORE), !options['no-minify'], (output) ->
+    fs.writeFile 'pkg/annotator.min.js', output
 
-task 'package:css', 'Build pkg/annotator.min.css', ->
-  packager.build_css ['css/annotator.css'], 'pkg/annotator.min.css'
+task 'package:css', 'Build pkg/annotator.min.css', (options) ->
+  packager.build_css ['css/annotator.css'], !options['no-minify'], (output) ->
+    fs.writeFile 'pkg/annotator.min.css', output
 
-task 'package:plugins', 'Build pkg/annotator.<plugin_name>.min.js for all plugins', ->
+task 'package:plugins', 'Build pkg/annotator.<plugin_name>.min.js for all plugins', (options) ->
+  make_callback = (pname) ->
+    (output) -> fs.writeFile "pkg/annotator.#{pname}.min.js", output
+
   for p in PLUGINS
-    packager.build_coffee util.src_files([p], 'plugin/'), "pkg/annotator.#{p}.min.js"
+    packager.build_coffee util.src_files([p], 'plugin/'), !options['no-minify'], make_callback(p)
 
-task 'package:kitchensink', 'Build pkg/annotator-full.min.js with Annotator and all plugins', ->
+task 'package:kitchensink', 'Build pkg/annotator-full.min.js with Annotator and all plugins', (options) ->
   plugins = PLUGINS.concat ['kitchensink']
   files = util.src_files(CORE).concat(util.src_files(plugins, 'plugin/'))
-  packager.build_coffee files, 'pkg/annotator-full.min.js'
+  packager.build_coffee files, !options['no-minify'], (output) ->
+    fs.writeFile 'pkg/annotator-full.min.js', output
 
 task 'package:clean', 'Clean package files', ->
   fs.unlink "pkg/annotator.min.css"
@@ -69,20 +83,22 @@ task 'package:clean', 'Clean package files', ->
 
 option '-c', '--no-config', 'Do not embed config file'
 
-task 'bookmarklet:prereqs', 'Compile the annotator for the bookmarklet', ->
+task 'bookmarklet:prereqs', 'Compile the annotator for the bookmarklet', (options) ->
   files = util.src_files(CORE).concat(util.src_files(BOOKMARKLET_PLUGINS, 'plugin/'))
 
-  packager.build_coffee files, bookmarklet.annotator_js
-  packager.build_css ['css/annotator.css'], bookmarklet.annotator_css, (css) ->
+  packager.build_coffee files, !options['no-minify'], (output) ->
+    fs.writeFile bookmarklet.annotator_js, output
+
+  packager.build_css ['css/annotator.css'], !options['no-minify'], (css) ->
     css = css.replace(/(image\/png)?;|\}/g, (_, m) ->
       return _ if m == 'image/png'
       '!important' + _
     )
 
-    fs.writeFile(bookmarklet.annotator_css, css)
+    fs.writeFile bookmarklet.annotator_css, css
 
 task 'bookmarklet:build', 'Output bookmarklet source', (options) ->
-  bookmarklet.build !options['no-config'], (err, src) -> print(src)
+  bookmarklet.build !options['no-config'], (output) -> print(output)
 
 task 'bookmarklet:build_demo', 'Create the bookmarklet demo files', ->
   invoke 'bookmarklet:prereqs'
@@ -114,14 +130,19 @@ task 'bookmarklet:watch', 'Watch the bookmarklet source for changes', ->
     return if curr.size is prev.size and curr.mtime.getTime() is prev.mtime.getTime()
     invoke 'bookmarklet:build_demo'
 
+task 'bookmarklet:upload', 'Upload bookmarklet source files to S3', ->
+  invoke 'bookmarklet:prereqs'
+  console.log("Uploading bookmarklet source files."
+              "Don't expect this to work unless you have `s3cmd` and have configured it"
+              "for access to the OKF's S3 account.")
+  run "s3cmd --acl-public sync contrib/bookmarklet/pkg/*.{js,css} s3://assets.annotateit.org/bookmarklet/"
+
 task 'i18n:update', 'Update the annotator.pot template', ->
-  util.relay 'xgettext', ['-Lpython',
-                          '-olocale/annotator.pot',
-                          '-k_t', '-kgettext'].concat(
-                            util.lib_files(CORE)
-                          ).concat(
-                            util.lib_files(PLUGINS, 'plugin/')
-                          ), util.noisyPrint
+  fileList = []
+  fileList = fileList.concat util.lib_files(CORE)
+  fileList = fileList.concat util.lib_files(PLUGINS, 'plugin/')
+
+  run "xgettext -Lpython -olocale/annotator.pot -k_t -kgettext #{fileList.join(" ")}"
 
 #----------------------------------------------------------------------------
 
@@ -130,39 +151,21 @@ task 'i18n:update', 'Update the annotator.pot template', ->
 #
 
 packager =
-  concat: (src, dest, callback) ->
-    exec "cat #{src.join ' '} > #{dest}", callback
+  build_coffee: (src, minify=true, callback=(->)) ->
+    min = if minify then UGLIFY_JS else 'cat'
+    cmd = "cat #{src.join ' '} | #{COFFEE} --stdio --print | #{min}"
 
-  concat_coffee: (src, dest, callback) ->
-    exec "cat #{src.join ' '} | coffee -sp > #{dest}", callback
+    exec cmd, (e, stdout, stderr) ->
+      throw e if e
+      callback(stdout)
 
-  compress: (src, type, callback) ->
-    yc = require 'yui-compressor'
+  build_css: (src, minify=true, callback=(->)) ->
+    min = if minify then UGLIFY_CSS else 'cat'
+    cmd = "#{min} #{src.join ' '}"
 
-    yc.compile(src, { type: type }, callback)
-
-  build_coffee: (src, dest, callback) ->
-    packager.concat_coffee(src, dest, ->
-      code = fs.readFileSync(dest, 'utf8')
-
-      packager.compress(code, 'js', (err, result) ->
-        throw err if err
-        fs.writeFileSync(dest, result)
-        (callback or ->)(result)
-      )
-    )
-
-  build_css: (src, dest, callback) ->
-    packager.concat(src, dest, ->
-      code = fs.readFileSync(dest, 'utf8')
-
-      packager.compress(code, 'css', (err, result) ->
-        throw err if err
-        result = packager.data_uri_ify(result)
-        fs.writeFileSync(dest, result)
-        (callback or ->)(result)
-      )
-    )
+    exec cmd, (e, stdout, stderr) ->
+      throw e if e
+      callback(packager.data_uri_ify(stdout))
 
   data_uri_ify: (css) ->
     # NB: path to image is "src/..." because the CSS urls start with "../img"
@@ -196,7 +199,11 @@ bookmarklet =
       config = fs.readFileSync(bookmarklet.config, 'utf8')
       source = source.replace('__config__', config)
 
-    packager.compress(source, 'js', callback)
+    proc = exec UGLIFY_JS, (e, stdout, stderr) ->
+      throw e if e
+      callback(stdout)
+
+    proc.stdin.end(source)
 
 #
 # Utility functions
@@ -205,16 +212,4 @@ bookmarklet =
 util =
   src_files: (names, prefix='') -> names.map (x) -> "src/#{prefix}#{x}.coffee"
   lib_files: (names, prefix='') -> names.map (x) -> "lib/#{prefix}#{x}.js"
-
-  # relay: run child process relaying std{out,err} to this process
-  relay: (cmd, args, stdoutPrint=print, stderrPrint=debug) ->
-    handle = spawn cmd, args
-
-    handle.stdout.on 'data', (data) -> stdoutPrint(data) if data
-    handle.stderr.on 'data', (data) -> stderrPrint(data) if data
-
-  noisyPrint: (data) ->
-    print data
-    if data.toString('utf8').indexOf('In') is 0
-      exec 'afplay ~/.autotest.d/sound/sound_fx/red.mp3 2>&1 >/dev/null'
 
