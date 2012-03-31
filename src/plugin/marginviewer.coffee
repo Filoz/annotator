@@ -139,7 +139,7 @@ class Annotator.Plugin.MarginViewerObjectStore
     location={top:topval,left:leftval}
     newObjectLocation=@findIndexForNewObject(location)
     if newObjectLocation>0
-      @data=@data[0..newObjectLocation-1].concat([@funcObject.mapFunc(obj)],@data[newObjectLocation..@data.length-1])
+      @data=@data[0..newObjectLocation].concat([@funcObject.mapFunc(obj)],@data[newObjectLocation+1..@data.length-1])
     else
       @data=[@funcObject.mapFunc(obj)].concat(@data[newObjectLocation..@data.length-1])
     obj[@indexfield]=newObjectLocation
