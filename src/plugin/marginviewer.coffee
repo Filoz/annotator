@@ -162,7 +162,7 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
     'annotationCreated':    'onAnnotationCreated'      
     'annotationDeleted':    'onAnnotationDeleted'      
     'annotationUpdated':    'onAnnotationUpdated'      
-    ".annotator-hl click":  "onAnnotationSelected"
+    '.annotator-hl click':  'onAnnotationSelected'
 
   pluginInit: ->
     return unless Annotator.supported()
@@ -235,7 +235,7 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
     marginObject=annotation._marginObject
     @marginData.deleteObject(annotation)
     $(marginObject).remove()
-    this.publish('delete',annotation)
+    this.publish('delete',[annotation])
     
   deleteHandler : (event) ->
     @onAnnotationDeleted(event.target.annotation)
@@ -254,10 +254,12 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
 
   renderMarginObject : (annotation) ->
     datetime = if annotation.created then @formattedDateTime(new Date annotation.created) else ''
-    return '<div class="annotator-marginviewer-element"><div class="annotator-marginviewer-header"><span class="annotator-marginviewer-user">'+annotation.user+'</span><span class="annotator-marginviewer-date" style="float: left; direction: ltr;">'+datetime+'</span></div><div class="annotator-marginviewer-text">'+annotation.text+'</div></div>'
+    delel = if annotation.permissions.delete.indexOf(@annotator.plugins.AnnotateItPermissions.user)>=0 then '<span class="annotator-marginviewer-delete" style="float: left; direction: ltr;">X</span>' else ''
+    return '<div class="annotator-marginviewer-element"><div class="annotator-marginviewer-header"><span class="annotator-marginviewer-user">'+annotation.user+'</span>'+delel+'<span class="annotator-marginviewer-date" style="float: left; direction: ltr;">'+datetime+'</span></div><div class="annotator-marginviewer-text">'+annotation.text+'</div></div>'
 
   createMarginObject : (annotation, location=null, hide=false) ->
     marginObjects=$(@renderMarginObject(annotation)).appendTo('.secondary').click((event) => @onMarginSelected(event.target)).mouseenter((event) => @onMarginMouseIn(event.target)).mouseleave((event) => @onMarginMouseOut(event.target))
+    marginObjects.children(".annotator-marginviewer-header").children(".annotator-marginviewer-delete").click((event) => @onMarginDeleted(event.target))
     if location!=null
       marginObjects.offset({top: location})
     if hide
@@ -305,6 +307,12 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
     @moveObjectsToNewLocation(newLocationsByObject,horizontalSlide)
     $(annotation.highlights).addClass("annotator-hl-uber").removeClass("annotator-hl")
     @currentSelectedAnnotation = annotation
+
+  onMarginDeleted: (obj) ->
+    marginObject = $(obj).closest(".annotator-marginviewer-element")[0]
+    annotation = marginObject.annotation
+    console.log('deleting annotation')
+    this.publish('delete',[annotation])
 
   moveObjectsToNewLocation: (newLocations,horizontalSlideObjects=[]) ->
     for newLocationStructure in newLocations
