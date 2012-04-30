@@ -22,6 +22,17 @@ describe 'Range', ->
     delete a
     clearFixtures()
 
+  describe ".nodeFromXPath()", ->
+    xpath = if window.require then "/html/body/p/strong" else "/html/body/div/p/strong"
+    it "should parse a standard xpath string", ->
+      node = Range.nodeFromXPath xpath
+      expect(node).toBe($('strong')[0])
+
+    it "should parse an standard xpath string for an xml document", ->
+      Annotator.$.isXMLDoc = -> true
+      node = Range.nodeFromXPath xpath
+      expect(node).toBe($('strong')[0])
+
   describe "SerializedRange", ->
     beforeEach ->
       r = new Range.SerializedRange({
@@ -37,17 +48,21 @@ describe 'Range', ->
         expect(norm instanceof Range.NormalizedRange).toBeTruthy()
         expect(norm.text()).toEqual("habitant morbi")
 
-      it "should return null if it cannot normalize the range", ->
-        spyOn(console, 'error')
-        normedRange = r.normalize($('<div/>')[0])
-        expect(normedRange).toBe(null)
-        expect(console.error).toHaveBeenCalled()
+      it "should raise Range.RangeError if it cannot normalize the range", ->
+        check = false
+        try
+          r.normalize($('<div/>')[0])
+        catch e
+          if e instanceof Range.RangeError
+            check = true
+
+        expect(check).toBeTruthy()
 
     it "serialize() returns a serialized range", ->
       seri = r.serialize(fix())
-      expect(seri.start).toEqual("/p/strong")
+      expect(seri.start).toEqual("/p[1]/strong[1]")
       expect(seri.startOffset).toEqual(13)
-      expect(seri.end).toEqual("/p/strong")
+      expect(seri.end).toEqual("/p[1]/strong[1]")
       expect(seri.endOffset).toEqual(27)
       expect(seri instanceof Range.SerializedRange).toBeTruthy()
 
@@ -58,17 +73,6 @@ describe 'Range', ->
       expect(obj.end).toEqual("/p/strong")
       expect(obj.endOffset).toEqual(27)
       expect(JSON.stringify(obj)).toEqual('{"start":"/p/strong","startOffset":13,"end":"/p/strong","endOffset":27}')
-
-    describe "_nodeFromXPath", ->
-      xpath = if window.require then "/html/body/p/strong" else "/html/body/div/p/strong"
-      it "should parse a standard xpath string", ->
-        node = r._nodeFromXPath xpath
-        expect(node).toBe($('strong')[0])
-
-      it "should parse an standard xpath string for an xml document", ->
-        Annotator.$.isXMLDoc = -> true
-        node = r._nodeFromXPath xpath
-        expect(node).toBe($('strong')[0])
 
   describe "BrowserRange", ->
     beforeEach ->
