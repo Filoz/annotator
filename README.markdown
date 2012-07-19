@@ -19,20 +19,16 @@ The Annotator project also has a simple but powerful plugin architecture. While 
 Usage
 -----
 
-To use Annotator, it's easiest to [download a packaged release][dl].
+To use Annotator, it's easiest to [download a packaged release][dl]. The most important files in these packages are `annotator.min.js` (or `annotator-full.min.js`), which contains the core Annotator code, and `annotator.min.css`, which contains all the CSS and embedded images for the annotator.
 
-In a tagged release, the `pkg/` directory will contain all the files you need to get going. The most important are `annotator.min.js`, which contains the core Annotator code, and `annotator.min.css`, which contains all the CSS and embedded images for the annotator.
+Annotator requires [jQuery][$]. The quickest way to get going with Annotator is to include the following in the `<head>` of your document (paths relative to the root of the unzipped download):
 
-Annotator requires [jQuery][$] and [an implementation][json2] of `JSON.parse` and `JSON.stringify`. In short, the quickest way to get going with annotator is to include the following in the `<head>` of your document (paths relative to the repository root):
+    <script src='http://ajax.googleapis.com/ajax/libs/jquery/1.7/jquery.min.js'></script>
 
-    <script src='lib/vendor/jquery.js'></script>
-    <script src='lib/vendor/json2.js'></script>
-
-    <script src='pkg/annotator.min.js'></script>
-    <link rel='stylesheet' href='pkg/annotator.min.css'>
+    <script src='annotator.min.js'></script>
+    <link rel='stylesheet' href='annotator.min.css'>
 
 [$]: http://jquery.com/
-[json2]: https://github.com/douglascrockford/JSON-js/blob/master/json2.js
 
 You can then initialize Annotator for the whole document by including the following at the end of the `<body>` tag:
 
@@ -88,40 +84,13 @@ Callback name                                  | Description
 Development
 -----------
 
-If you wish to develop Annotator, you'll need to have a working installation of [Node.js][node] (v0.6.x). I'd highly recommend installing both Node.js and the [Node Package Manager][npm], after which you can run the following to get up and running:
-
-    $ npm install .
-
-The Annotator source is found in `src/`, and is written in CoffeeScript, which is a little language that compiles to Javascript. See the [CoffeeScript website][coffee] for more information.
-
-`dev.html` loads the raw development files from `lib/` and can be useful when developing.
-
-The tests are to be found in `test/spec/`, and use [Jasmine][jas] to support a BDD process.
-
-For inline documentation we use [TomDoc][tom]. It's a Ruby specification but it
-also works nicely with CoffeeScript.
-
-
-The `Cakefile` provides a number of useful tasks. (**NB**: If `cake` doesn't work for you, try `` `npm bin`/cake`` instead.)
-
-    $ cake serve        # serves the directory at http://localhost:8000 (requires python)
-    $ cake test         # opens the test suite in your browser
-    $ cake test:phantom # runs the test suite with PhantomJS
-    $ cake watch        # compiles src/*.coffee files into lib/*.js when they change
-    $ cake package[:*]  # builds the production version of Annotator in pkg/
-
-Run `cake` (or `` `npm bin`/cake``) to see the list of all available tasks.
+See [HACKING.markdown](/okfn/annotator/blob/master/HACKING.markdown)
 
 Community
 ---------
 
 The annotator project has a [mailing list][dev] for developer discussion and community members can sometimes be found in the #annotator channel on [freenode IRC][irc].
 
-[node]: http://nodejs.org/
-[npm]: http://npmjs.org/
-[coffee]: http://coffeescript.org/ 
-[jas]: http://pivotal.github.com/jasmine/
-[tom]: http://tomdoc.org/
 [dev]: http://lists.okfn.org/mailman/listinfo/annotator-dev
 [irc]: http://freenode.net/
 

@@ -47,6 +47,10 @@
 	background: rgba(255, 255, 10, 0.3);
 }
 
+.annotator-hl-temporary {
+	background: rgba(0, 124, 255, 0.3);
+}
+
 /* Annotator Wrapper
 -------------------------------------------------------------------- */
 
@@ -54,10 +58,16 @@
 	position: relative;
 }
 
+/* NB: If you change the list of classes for which z-index is set,
+       you should update Annotator._setupDynamicStyle() */
 .annotator-adder,
 .annotator-outer,
 .annotator-notice {
-	z-index: 9999;
+	z-index: 1020;
+}
+
+.annotator-filter {
+	z-index: 1010;
 }
 
 .annotator-adder,
@@ -415,7 +425,7 @@
 	border-radius: 0 0 5px 5px;
 }
 
-.annotator-invert-y .annotator-controls {
+.annotator-editor.annotator-invert-y .annotator-controls {
 	border-top: none;
 	border-bottom: 1px solid rgb(180, 180, 180);
 	-webkit-border-radius: 5px 5px 0 0;
@@ -694,7 +704,6 @@
 -------------------------------------------------------------------- */
 
 .annotator-filter {
-	z-index: 9998; /* notifications/popups at 9999; filter bar should be lower */
 	position: fixed;
 	top: 0;
 	right: 0;
