@@ -953,4 +953,6 @@
 .annotator-marginviewer-delete {
 	margin-left: 0px;
 	margin-right: 2px;
+	color: red;
+	font-weight: bold;
 }

@@ -152,6 +152,10 @@ class Annotator.Plugin.MarginViewerObjectStore
       @data=@data[1..@data.length-1]
     @deletions+=1
 
+  getObject : (object) ->
+    objectLocation=@getObjectLocation(object)
+    return @data[objectLocation]
+
 class Annotator.Plugin.MarginViewer extends Annotator.Plugin
   constructor : (element,options) ->
     super
@@ -171,6 +175,7 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
       hide: (annotations) => @hideHighlightedMargin(annotations)
       load: (annotations) => @highlightMargin(annotations)
       isShown: ->
+      addField: ->
       element: 
         position: ->
         css: ->
@@ -232,14 +237,11 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
     @onMarginSelected(annotations[selectIndex]._marginObject)
  
   onAnnotationDeleted: (annotation) ->
-    marginObject=annotation._marginObject
+    console.log('onAnnotationDeleted called')
+    marginObject=@marginData.getObject(annotation)
     @marginData.deleteObject(annotation)
     $(marginObject).remove()
-    this.publish('delete',[annotation])
     
-  deleteHandler : (event) ->
-    @onAnnotationDeleted(event.target.annotation)
-
   zeroPad : (num,count) ->
     numZeroPad = String(num)
     while numZeroPad.length<count
@@ -254,7 +256,8 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
 
   renderMarginObject : (annotation) ->
     datetime = if annotation.created then @formattedDateTime(new Date annotation.created) else ''
-    delel = if annotation.permissions.delete.indexOf(@annotator.plugins.AnnotateItPermissions.user)>=0 then '<span class="annotator-marginviewer-delete" style="float: left; direction: ltr;">X</span>' else ''
+    user = @annotator.plugins.AnnotateItPermissions.user.userId
+    delel = if annotation.user is user or annotation.permissions.delete.indexOf(user)>=0 then '<span class="annotator-marginviewer-delete" style="float: left; direction: ltr;">X</span>' else ''
     return '<div class="annotator-marginviewer-element"><div class="annotator-marginviewer-header"><span class="annotator-marginviewer-user">'+annotation.user+'</span>'+delel+'<span class="annotator-marginviewer-date" style="float: left; direction: ltr;">'+datetime+'</span></div><div class="annotator-marginviewer-text">'+annotation.text+'</div></div>'
 
   createMarginObject : (annotation, location=null, hide=false) ->
@@ -311,8 +314,8 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
   onMarginDeleted: (obj) ->
     marginObject = $(obj).closest(".annotator-marginviewer-element")[0]
     annotation = marginObject.annotation
-    console.log('deleting annotation')
-    this.publish('delete',[annotation])
+    annotation._marginObject = null
+    @annotator.deleteAnnotation(annotation)
 
   moveObjectsToNewLocation: (newLocations,horizontalSlideObjects=[]) ->
     for newLocationStructure in newLocations
