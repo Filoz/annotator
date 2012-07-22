@@ -42,10 +42,10 @@ class Annotator.Plugin.MarginViewerObjectStore
   getObjectLocation: (obj) -> 
     supposedLocation = obj[@indexfield]
     # object is at its internally stored location
-    if @objectEquals(@data[supposedLocation][1],obj)
+    if supposedLocation<@data.length and @objectEquals(@data[supposedLocation][1],obj)
       return supposedLocation
-    minimumIndex=Math.max(0,@deletions)
-    maximumIndex=Math.min(@data.length-1,@insertions) 
+    minimumIndex=Math.max(0,supposedLocation-@deletions)
+    maximumIndex=Math.min(@data.length-1,supposedLocation+@insertions) 
     for index in [minimumIndex..maximumIndex]
       currentObject = @data[index][1]
       if @objectEquals(currentObject,obj)
@@ -137,24 +137,25 @@ class Annotator.Plugin.MarginViewerObjectStore
   addNewObject : (obj,topval,leftval) ->
     location={top:topval,left:leftval}
     newObjectLocation=@findIndexForNewObject(location)
-    if newObjectLocation>0
-      @data=@data[0..newObjectLocation].concat([@funcObject.mapFunc(obj)],@data[newObjectLocation+1..@data.length-1])
-    else
-      @data=[@funcObject.mapFunc(obj)].concat(@data[newObjectLocation..@data.length-1])
+    @data.splice(newObjectLocation,0,@funcObject.mapFunc(obj))
     obj[@indexfield]=newObjectLocation
     @insertions+=1
     
   deleteObject : (object) ->
     objectLocation=@getObjectLocation(object)
-    if objectLocation>0
-      @data=@data[0..objectLocation-1].concat(@data[objectLocation..@data.length-1])
-    else
-      @data=@data[1..@data.length-1]
+    @data.splice(objectLocation,1)
     @deletions+=1
 
   getObject : (object) ->
     objectLocation=@getObjectLocation(object)
     return @data[objectLocation]
+
+  getNextObject : (object) ->
+    currentLocation = @getObjectLocation(object)
+    if currentLocation+1<@data.length
+      return @data[currentLocation+1]
+    else
+      return null
 
 class Annotator.Plugin.MarginViewer extends Annotator.Plugin
   constructor : (element,options) ->
@@ -216,9 +217,8 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
     newObjectTop=$(annotation.highlights[0]).offset().top
     newObjectBottom=newObjectTop+$(marginObject).outerHeight(true)
     @marginData.addNewObject(annotation,newObjectTop,$(annotation.highlights[0]).offset().left)
-    newLocations=@marginData.getNewLocationsForObject(newObjectTop,newObjectBottom,marginObject)
-    @moveObjectsToNewLocation(newLocations)
-    $(marginObject).fadeIn('fast').offset({top:newObjectTop})
+    $(marginObject).fadeIn('fast')
+    @onMarginSelected(marginObject)
 
   onAnnotationSelected: (event) ->
     event.stopPropagation()
@@ -237,11 +237,11 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
     @onMarginSelected(annotations[selectIndex]._marginObject)
  
   onAnnotationDeleted: (annotation) ->
-    console.log('onAnnotationDeleted called')
-    marginObject=@marginData.getObject(annotation)
+    nextObject = @marginData.getNextObject(annotation)
     @marginData.deleteObject(annotation)
-    $(marginObject).remove()
-    
+    if nextObject!=null
+      @onMarginSelected(nextObject[1]._marginObject)
+
   zeroPad : (num,count) ->
     numZeroPad = String(num)
     while numZeroPad.length<count
@@ -293,18 +293,19 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
         return
       else
         currentMarginObject=@currentSelectedAnnotation._marginObject
-        $(@currentSelectedAnnotation.highlights).removeClass("annotator-hl-uber").removeClass("annotator-hl-uber-temp").addClass("annotator-hl")
-        # find object's new top if it needs to change, also remove it from the list
-        currentObjectNewTop = $(currentMarginObject).offset().top
-        newLocationsByObject=$.grep(newLocationsByObject,(value) ->
-          if value[1].annotation.id is currentMarginObject.annotation.id
-            currentObjectNewTop=value[0]
-            return false
-          else
-            return true
-        )
-        horizontalSlide.push([currentObjectNewTop,"+=20px",currentMarginObject])
-        $(currentMarginObject).removeClass("annotator-marginviewer-selected")
+        if currentMarginObject!=null
+          $(@currentSelectedAnnotation.highlights).removeClass("annotator-hl-uber").removeClass("annotator-hl-uber-temp").addClass("annotator-hl")
+          # find object's new top if it needs to change, also remove it from the list
+          currentObjectNewTop = $(currentMarginObject).offset().top
+          newLocationsByObject=$.grep(newLocationsByObject,(value) ->
+            if value[1].annotation.id is currentMarginObject.annotation.id
+              currentObjectNewTop=value[0]
+              return false
+            else
+              return true
+          )
+          horizontalSlide.push([currentObjectNewTop,"+=20px",currentMarginObject])
+          $(currentMarginObject).removeClass("annotator-marginviewer-selected")
     $(marginObject).addClass("annotator-marginviewer-selected")
     horizontalSlide.push([newTop,"-=20px",marginObject])
     @moveObjectsToNewLocation(newLocationsByObject,horizontalSlide)
@@ -314,6 +315,7 @@ class Annotator.Plugin.MarginViewer extends Annotator.Plugin
   onMarginDeleted: (obj) ->
     marginObject = $(obj).closest(".annotator-marginviewer-element")[0]
     annotation = marginObject.annotation
+    $(marginObject).remove()
     annotation._marginObject = null
     @annotator.deleteAnnotation(annotation)
 
